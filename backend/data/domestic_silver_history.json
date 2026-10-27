@@ -1,0 +1,38 @@
+{
+  "Visakhapatnam": [
+    {
+      "city": "Visakhapatnam",
+      "date": "2026-10-26",
+      "price_per_kg": 228743.0,
+      "base_price_1g": 222.08,
+      "gst_amount_1g": 6.66,
+      "final_price_1g": 228.74,
+      "price_10g": 2287.4,
+      "price_100g": 22874.0,
+      "spot_usd_oz": 54.36,
+      "usd_inr": 95.18,
+      "import_duty_pct": 15.0,
+      "gst_rate_pct": 3.0,
+      "retail_spread_pct": 13.600000000000001,
+      "source_timestamp": "2026-10-27T21:11:37Z",
+      "fetch_timestamp": "2026-10-27T21:11:37Z"
+    },
+    {
+      "city": "Visakhapatnam",
+      "date": "2026-10-27",
+      "price_per_kg": 225059.0,
+      "base_price_1g": 218.5,
+      "gst_amount_1g": 6.56,
+      "final_price_1g": 225.06,
+      "price_10g": 2250.6,
+      "price_100g": 22506.0,
+      "spot_usd_oz": 53.474998,
+      "usd_inr": 95.1855,
+      "import_duty_pct": 15.0,
+      "gst_rate_pct": 3.0,
+      "retail_spread_pct": 13.6,
+      "source_timestamp": "2026-10-27T12:16:40.369Z",
+      "fetch_timestamp": "2026-10-27T12:16:40Z"
+    }
+  ]
+}
