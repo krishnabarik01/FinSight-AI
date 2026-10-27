@@ -1,6 +1,19 @@
 // FinSight AI Frontend API Client
 
-const API_BASE = '/api';
+const getApiBase = (): string => {
+  const envUrl = (
+    (typeof import.meta !== 'undefined' && import.meta.env && (
+      import.meta.env.VITE_API_URL ||
+      import.meta.env.VITE_BACKEND_URL ||
+      import.meta.env.VITE_API_BASE
+    )) || ''
+  ).trim();
+  if (!envUrl) return '/api';
+  const cleanUrl = envUrl.replace(/\/+$/, '');
+  return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
+};
+
+const API_BASE = getApiBase();
 
 export interface User {
   id: string;
@@ -17,22 +30,64 @@ export interface AuthResponse {
 }
 
 // Token helper
-export const getToken = (): string | null => localStorage.getItem('finsight_token');
-export const setToken = (token: string): void => localStorage.setItem('finsight_token', token);
-export const removeToken = (): void => localStorage.removeItem('finsight_token');
+export const getToken = (): string | null => {
+  try {
+    const token = localStorage.getItem('finsight_token');
+    if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
+      return null;
+    }
+    return token.trim();
+  } catch {
+    return null;
+  }
+};
+
+export const setToken = (token?: string | null): void => {
+  try {
+    if (!token || typeof token !== 'string' || token === 'undefined' || token === 'null' || token.trim() === '') {
+      removeToken();
+      return;
+    }
+    localStorage.setItem('finsight_token', token.trim());
+  } catch {
+    // Ignore localStorage errors
+  }
+};
+
+export const removeToken = (): void => {
+  try {
+    localStorage.removeItem('finsight_token');
+  } catch {
+    // Ignore localStorage errors
+  }
+};
 
 export const getStoredUser = (): User | null => {
   try {
     const u = localStorage.getItem('finsight_user');
-    return u ? JSON.parse(u) : null;
+    if (!u || u === 'undefined' || u === 'null' || u.trim() === '') return null;
+    return JSON.parse(u);
   } catch (err) {
     console.warn('[FinSight] Failed to parse stored user from localStorage, clearing invalid item:', err);
-    localStorage.removeItem('finsight_user');
+    try {
+      localStorage.removeItem('finsight_user');
+    } catch {
+      // Ignore
+    }
     return null;
   }
 };
-export const setStoredUser = (user: User): void => {
-  localStorage.setItem('finsight_user', JSON.stringify(user));
+
+export const setStoredUser = (user?: User | null): void => {
+  try {
+    if (!user || typeof user !== 'object') {
+      localStorage.removeItem('finsight_user');
+      return;
+    }
+    localStorage.setItem('finsight_user', JSON.stringify(user));
+  } catch {
+    // Ignore localStorage errors
+  }
 };
 
 async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -42,8 +97,8 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
     ...(options.headers as Record<string, string>),
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '') {
+    headers['Authorization'] = `Bearer ${token.trim()}`;
   }
 
   const controller = new AbortController();
@@ -109,17 +164,33 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
 // Auth API
 export const api = {
   auth: {
-    login: (credentials: { email: string; password: string }) =>
-      apiFetch<AuthResponse>('/auth/login', {
+    login: async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
+      const res = await apiFetch<AuthResponse>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(credentials),
-      }),
-    register: (data: { name: string; email: string; password: string; phone?: string }) =>
-      apiFetch<AuthResponse>('/auth/register', {
+      });
+      if (!res || !res.access_token) {
+        throw new Error('Authentication response did not contain an access token. Please verify backend availability.');
+      }
+      return res;
+    },
+    register: async (data: { name: string; email: string; password: string; phone?: string }): Promise<AuthResponse> => {
+      const res = await apiFetch<AuthResponse>('/auth/register', {
         method: 'POST',
         body: JSON.stringify(data),
-      }),
-    me: () => apiFetch<User>('/auth/me'),
+      });
+      if (!res || !res.access_token) {
+        throw new Error('Registration response did not contain an access token. Please verify backend availability.');
+      }
+      return res;
+    },
+    me: async (): Promise<User> => {
+      const token = getToken();
+      if (!token) {
+        throw new Error('No authentication token available.');
+      }
+      return apiFetch<User>('/auth/me');
+    },
   },
 
   dashboard: {

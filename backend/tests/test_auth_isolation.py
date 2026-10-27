@@ -106,10 +106,27 @@ def test_get_me_with_invalid_token_returns_401(client):
     resp = client.get("/api/auth/me", headers=bad_headers)
     assert resp.status_code == 401
 
+def test_get_me_with_bearer_undefined_returns_401(client):
+    """Accessing /api/auth/me with 'Bearer undefined' header must return 401 Unauthorized rather than 500."""
+    bad_headers = {"Authorization": "Bearer undefined"}
+    resp = client.get("/api/auth/me", headers=bad_headers)
+    assert resp.status_code == 401
+
 def test_get_me_without_token_returns_401(client):
     """Accessing /api/auth/me without an authorization header must return 401 Unauthorized."""
     resp = client.get("/api/auth/me")
     assert resp.status_code == 401
+
+def test_cors_headers_for_render_origin(client):
+    """Preflight and requests from Render deployment origins should receive valid CORS headers."""
+    headers = {
+        "Origin": "https://finsight-ai-1-n7mt.onrender.com",
+        "Access-Control-Request-Method": "GET",
+    }
+    resp = client.options("/api/health", headers=headers)
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == "https://finsight-ai-1-n7mt.onrender.com"
+
 
 @pytest.mark.anyio
 async def test_password_hash_not_stored_in_plain_text(client, make_user):

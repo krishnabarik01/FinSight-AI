@@ -1,3 +1,4 @@
+import os
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -121,10 +122,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration restricted to ALLOWED_ORIGINS
+# CORS configuration restricted to ALLOWED_ORIGINS + Render domains
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origin_regex=r"^https:\/\/.*\.onrender\.com$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -196,3 +198,26 @@ async def health_check():
         "quote_provider_status": quote_status,
         "database": db_health
     }
+
+# Mount static frontend build if present (enables single-service Render web deployment)
+frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
+if os.path.isdir(frontend_dist):
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    assets_dir = os.path.join(frontend_dist, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa_frontend(full_path: str):
+        if full_path.startswith("api"):
+            raise HTTPException(status_code=404, detail="Not Found")
+        target_file = os.path.join(frontend_dist, full_path)
+        if os.path.isfile(target_file):
+            return FileResponse(target_file)
+        index_file = os.path.join(frontend_dist, "index.html")
+        if os.path.isfile(index_file):
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Frontend static index.html not found")
+

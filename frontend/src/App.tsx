@@ -21,7 +21,10 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { getToken, getStoredUser, removeToken, api, setToken, setStoredUser } from './services/api';
 
 export function App() {
-  const [user, setUser] = useState<any>(() => getStoredUser());
+  const [user, setUser] = useState<any>(() => {
+    const token = getToken();
+    return token ? getStoredUser() : null;
+  });
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [selectedStock, setSelectedStock] = useState<string>('SBIN');
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
@@ -41,13 +44,24 @@ export function App() {
     if (token) {
       api.auth.me()
         .then(u => {
-          setUser(u);
-          setStoredUser(u);
+          if (u && u.id) {
+            setUser(u);
+            setStoredUser(u);
+          } else {
+            removeToken();
+            setStoredUser(null);
+            setUser(null);
+          }
         })
         .catch(() => {
           removeToken();
+          setStoredUser(null);
           setUser(null);
         });
+    } else {
+      removeToken();
+      setStoredUser(null);
+      setUser(null);
     }
 
     return () => {
@@ -57,7 +71,7 @@ export function App() {
 
   const handleLogout = () => {
     removeToken();
-    localStorage.removeItem('finsight_user');
+    setStoredUser(null);
     setUser(null);
   };
 
@@ -69,10 +83,14 @@ export function App() {
   const handleExploreDemo = async () => {
     try {
       const res = await api.auth.login({ email: 'demo@finsight.ai', password: 'password123' });
-      setToken(res.access_token);
-      setStoredUser(res.user);
-      setUser(res.user);
-      setCurrentTab('dashboard');
+      if (res && res.access_token && res.user) {
+        setToken(res.access_token);
+        setStoredUser(res.user);
+        setUser(res.user);
+        setCurrentTab('dashboard');
+        return;
+      }
+      throw new Error('Incomplete login response');
     } catch {
       // If login fails, try registration
       try {
@@ -82,10 +100,14 @@ export function App() {
           password: 'password123',
           phone: '+1 (415) 555-2671',
         });
-        setToken(regRes.access_token);
-        setStoredUser(regRes.user);
-        setUser(regRes.user);
-        setCurrentTab('dashboard');
+        if (regRes && regRes.access_token && regRes.user) {
+          setToken(regRes.access_token);
+          setStoredUser(regRes.user);
+          setUser(regRes.user);
+          setCurrentTab('dashboard');
+          return;
+        }
+        throw new Error('Incomplete registration response');
       } catch {
         // Fallback demo mock
         const fallback = {

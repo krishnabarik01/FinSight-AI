@@ -32,6 +32,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
         res = await api.auth.register({ name, email, password, phone });
       }
 
+      if (!res?.access_token || !res?.user) {
+        throw new Error('Authentication response did not return a valid user profile or token.');
+      }
+
       setToken(res.access_token);
       setStoredUser(res.user);
       onSuccess(res.user);
@@ -48,6 +52,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     setError(null);
     try {
       const res = await api.auth.login({ email: 'demo@finsight.ai', password: 'password123' });
+      if (!res?.access_token || !res?.user) {
+        throw new Error('Demo login returned an incomplete response.');
+      }
       setToken(res.access_token);
       setStoredUser(res.user);
       onSuccess(res.user);
@@ -61,12 +68,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           password: 'password123',
           phone: '+1 (415) 555-2671',
         });
+        if (!regRes?.access_token || !regRes?.user) {
+          throw new Error('Demo registration returned an incomplete response.');
+        }
         setToken(regRes.access_token);
         setStoredUser(regRes.user);
         onSuccess(regRes.user);
         onClose();
       } catch (regErr: any) {
-        setError(regErr.message);
+        setError(regErr.message || 'Demo login failed. Please verify backend availability.');
       }
     } finally {
       setLoading(false);

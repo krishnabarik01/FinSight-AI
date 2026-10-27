@@ -33,7 +33,7 @@ class Settings(BaseModel):
     ALLOWED_ORIGINS: List[str] = [
         o.strip() for o in os.getenv(
             "ALLOWED_ORIGINS",
-            "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
+            "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,https://finsight-ai-1-n7mt.onrender.com"
         ).split(",") if o.strip()
     ]
 
