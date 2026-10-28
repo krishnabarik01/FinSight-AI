@@ -150,7 +150,7 @@ async def register(req: UserRegister, db: AsyncSession = Depends(get_db_session)
         phone=new_user.phone,
         created_at=new_user.created_at.isoformat()
     )
-    return Token(access_token=token, user=user_out)
+    return Token(access_token=token, token=token, user=user_out)
 
 @router.post("/login", response_model=Token)
 async def login(req: UserLogin, db: AsyncSession = Depends(get_db_session)):
@@ -174,7 +174,7 @@ async def login(req: UserLogin, db: AsyncSession = Depends(get_db_session)):
         phone=user.phone,
         created_at=user.created_at.isoformat() if isinstance(user.created_at, datetime) else str(user.created_at)
     )
-    return Token(access_token=token, user=user_out)
+    return Token(access_token=token, token=token, user=user_out)
 
 @router.get("/me", response_model=UserOut)
 async def get_me(current_user: UserOut = Depends(get_current_user)):

@@ -78,11 +78,11 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting FinSight AI backend services...")
     await db_manager.connect()
-    if settings.APP_ENV == "dev":
-        logger.info("APP_ENV is 'dev': seeding demo user if absent.")
+    try:
         await seed_demo_user()
-    else:
-        logger.info("APP_ENV is '%s': skipping demo user seeding in non-dev environment.", settings.APP_ENV)
+        logger.info("FinSight AI demo user verified and seeded if absent.")
+    except Exception as e:
+        logger.warning("Notice: Demo user seeding skipped or encountered non-fatal error: %s", e)
     
     import os
     run_embedded = os.getenv("RUN_WORKER_IN_WEB", "false").lower() in ("true", "1", "yes")

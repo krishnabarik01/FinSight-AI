@@ -6,8 +6,16 @@ const getApiBase = (): string => {
       import.meta.env.VITE_API_URL ||
       import.meta.env.VITE_BACKEND_URL ||
       import.meta.env.VITE_API_BASE
-    )) || ''
+    )) ||
+    (typeof window !== 'undefined' && (
+      (window as any).__FINSIGHT_API_URL__ ||
+      (window as any).VITE_API_URL ||
+      (window as any).VITE_BACKEND_URL
+    )) ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('finsight_api_base')) ||
+    ''
   ).trim();
+
   if (!envUrl) return '/api';
   const cleanUrl = envUrl.replace(/\/+$/, '');
   return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
@@ -25,8 +33,41 @@ export interface User {
 
 export interface AuthResponse {
   access_token: string;
-  token_type: string;
+  token?: string;
+  token_type?: string;
   user: User;
+}
+
+export function normalizeAuthResponse(res: any): AuthResponse {
+  if (!res || typeof res !== 'object') {
+    throw new Error('Authentication response was invalid or empty. Please verify backend availability.');
+  }
+
+  // Defensively extract token from all common representations:
+  // res.access_token, res.token, res.accessToken, res.data?.access_token, res.data?.token
+  const token =
+    (typeof res.access_token === 'string' && res.access_token.trim()) ||
+    (typeof res.token === 'string' && res.token.trim()) ||
+    (typeof res.accessToken === 'string' && res.accessToken.trim()) ||
+    (typeof res.data?.access_token === 'string' && res.data.access_token.trim()) ||
+    (typeof res.data?.token === 'string' && res.data.token.trim()) ||
+    '';
+
+  if (!token) {
+    throw new Error('Authentication response did not contain an access token. Please verify backend availability.');
+  }
+
+  // Defensively extract user
+  const rawUser = (res.user && typeof res.user === 'object' ? res.user : null) ||
+                  (res.data?.user && typeof res.data.user === 'object' ? res.data.user : null);
+  const tokenType = res.token_type || res.tokenType || res.data?.token_type || 'bearer';
+
+  return {
+    access_token: token,
+    token: token,
+    token_type: tokenType,
+    user: rawUser as User,
+  };
 }
 
 // Token helper
@@ -105,9 +146,13 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
   const timeoutId = setTimeout(() => controller.abort(), 20000);
   const signal = options.signal || controller.signal;
 
+  // Normalize endpoint to prevent double /api/api
+  const cleanEndpoint = endpoint.startsWith('/api/') ? endpoint.slice(4) : endpoint;
+  const targetUrl = `${API_BASE}${cleanEndpoint.startsWith('/') ? cleanEndpoint : `/${cleanEndpoint}`}`;
+
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${endpoint}`, {
+    response = await fetch(targetUrl, {
       ...options,
       headers,
       signal,
@@ -121,6 +166,9 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
     clearTimeout(timeoutId);
   }
 
+  const contentType = (response.headers.get('content-type') || '').toLowerCase();
+  const text = await response.text();
+
   if (!response.ok) {
     if (response.status === 401) {
       removeToken();
@@ -129,35 +177,39 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
     }
     let errorDetail = `API request failed (${response.status})`;
     try {
-      const text = await response.text();
-      try {
-        const errJson = JSON.parse(text);
-        if (typeof errJson.detail === 'string') {
-          errorDetail = errJson.detail;
-        } else if (errJson.detail && typeof errJson.detail === 'object') {
-          errorDetail = errJson.detail.detail || errJson.detail.error || JSON.stringify(errJson.detail);
-        } else if (typeof errJson.error === 'string') {
-          errorDetail = errJson.detail ? `${errJson.error}: ${errJson.detail}` : errJson.error;
-        } else if (typeof errJson.message === 'string') {
-          errorDetail = errJson.message;
-        }
-      } catch {
-        if (text && text.trim().length > 0 && text.length < 200) {
-          errorDetail = text.trim();
-        }
+      const errJson = JSON.parse(text);
+      if (typeof errJson.detail === 'string') {
+        errorDetail = errJson.detail;
+      } else if (errJson.detail && typeof errJson.detail === 'object') {
+        errorDetail = errJson.detail.detail || errJson.detail.error || JSON.stringify(errJson.detail);
+      } else if (typeof errJson.error === 'string') {
+        errorDetail = errJson.detail ? `${errJson.error}: ${errJson.detail}` : errJson.error;
+      } else if (typeof errJson.message === 'string') {
+        errorDetail = errJson.message;
       }
     } catch {
-      // keep fallback
+      if (text && text.trim().length > 0 && text.length < 200) {
+        errorDetail = text.trim();
+      }
     }
-    console.error(`[FinSight API Error] ${options.method || 'GET'} ${endpoint} (${response.status}):`, errorDetail);
+    console.error(`[FinSight API Error] ${options.method || 'GET'} ${cleanEndpoint} (${response.status}):`, errorDetail);
     throw new Error(errorDetail);
   }
 
-  try {
-    const text = await response.text();
-    return text ? JSON.parse(text) : ({} as T);
-  } catch {
+  if (!text || text.trim() === '') {
     return {} as T;
+  }
+
+  // Detect HTML responses served by static SPA fallbacks
+  if (contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+    throw new Error('API request returned HTML instead of JSON. The backend server may be offline or VITE_API_URL is misconfigured.');
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    console.error(`[FinSight JSON Parse Error] Failed to parse response from ${cleanEndpoint}:`, text.slice(0, 100));
+    throw new Error('Invalid JSON response received from API server.');
   }
 }
 
@@ -165,24 +217,36 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
 export const api = {
   auth: {
     login: async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
-      const res = await apiFetch<AuthResponse>('/auth/login', {
+      const rawRes = await apiFetch<any>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(credentials),
       });
-      if (!res || !res.access_token) {
-        throw new Error('Authentication response did not contain an access token. Please verify backend availability.');
+      const authRes = normalizeAuthResponse(rawRes);
+      if (!authRes.user) {
+        try {
+          setToken(authRes.access_token);
+          authRes.user = await api.auth.me();
+        } catch {
+          // Keep whatever fallback is available
+        }
       }
-      return res;
+      return authRes;
     },
     register: async (data: { name: string; email: string; password: string; phone?: string }): Promise<AuthResponse> => {
-      const res = await apiFetch<AuthResponse>('/auth/register', {
+      const rawRes = await apiFetch<any>('/auth/register', {
         method: 'POST',
         body: JSON.stringify(data),
       });
-      if (!res || !res.access_token) {
-        throw new Error('Registration response did not contain an access token. Please verify backend availability.');
+      const authRes = normalizeAuthResponse(rawRes);
+      if (!authRes.user) {
+        try {
+          setToken(authRes.access_token);
+          authRes.user = await api.auth.me();
+        } catch {
+          // Keep fallback
+        }
       }
-      return res;
+      return authRes;
     },
     me: async (): Promise<User> => {
       const token = getToken();

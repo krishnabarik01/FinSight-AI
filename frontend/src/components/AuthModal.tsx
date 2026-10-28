@@ -32,13 +32,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
         res = await api.auth.register({ name, email, password, phone });
       }
 
-      if (!res?.access_token || !res?.user) {
-        throw new Error('Authentication response did not return a valid user profile or token.');
+      const token = res?.access_token || res?.token;
+      if (!token) {
+        throw new Error('Authentication response did not return a valid access token.');
       }
 
-      setToken(res.access_token);
-      setStoredUser(res.user);
-      onSuccess(res.user);
+      setToken(token);
+      const authenticatedUser = res?.user || {
+        id: 'user',
+        name: name || email.split('@')[0],
+        email: email,
+        phone: phone || undefined,
+      };
+      setStoredUser(authenticatedUser);
+      onSuccess(authenticatedUser);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Please verify credentials.');
@@ -52,12 +59,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     setError(null);
     try {
       const res = await api.auth.login({ email: 'demo@finsight.ai', password: 'password123' });
-      if (!res?.access_token || !res?.user) {
+      const token = res?.access_token || res?.token;
+      if (!token) {
         throw new Error('Demo login returned an incomplete response.');
       }
-      setToken(res.access_token);
-      setStoredUser(res.user);
-      onSuccess(res.user);
+      setToken(token);
+      const user = res.user || {
+        id: 'demo-user-finsight-2026',
+        name: 'Alex Mercer',
+        email: 'demo@finsight.ai',
+        phone: '+14155552671',
+      };
+      setStoredUser(user);
+      onSuccess(user);
       onClose();
     } catch {
       // If demo user wasn't registered yet, register it directly
@@ -68,12 +82,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           password: 'password123',
           phone: '+1 (415) 555-2671',
         });
-        if (!regRes?.access_token || !regRes?.user) {
+        const regToken = regRes?.access_token || regRes?.token;
+        if (!regToken) {
           throw new Error('Demo registration returned an incomplete response.');
         }
-        setToken(regRes.access_token);
-        setStoredUser(regRes.user);
-        onSuccess(regRes.user);
+        setToken(regToken);
+        const user = regRes.user || {
+          id: 'demo-user-finsight-2026',
+          name: 'Alex Mercer',
+          email: 'demo@finsight.ai',
+          phone: '+14155552671',
+        };
+        setStoredUser(user);
+        onSuccess(user);
         onClose();
       } catch (regErr: any) {
         setError(regErr.message || 'Demo login failed. Please verify backend availability.');

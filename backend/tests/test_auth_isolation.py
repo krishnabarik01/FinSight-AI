@@ -261,3 +261,72 @@ def test_cross_user_alert_rule_delete_forbidden(client, make_user):
     # Verify A's rule still exists in database
     a_rules = client.get("/api/alerts/rules", headers=user_a["headers"]).json()
     assert any(r["id"] == rule_id for r in a_rules)
+
+def test_login_response_schema_contains_access_token_and_token(client, make_user):
+    """Login response must include access_token, token alias, token_type, and user object."""
+    user = make_user(password="ValidSecure2026!")
+    resp = client.post("/api/auth/login", json={
+        "email": user["email"],
+        "password": "ValidSecure2026!"
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "access_token" in data and isinstance(data["access_token"], str) and len(data["access_token"]) > 20
+    assert "token" in data and data["token"] == data["access_token"]
+    assert data.get("token_type") == "bearer"
+    assert "user" in data and isinstance(data["user"], dict)
+    assert data["user"]["email"] == user["email"]
+    assert "id" in data["user"]
+
+def test_registration_response_schema_contains_access_token_and_token(client):
+    """Registration response must include access_token, token alias, token_type, and user object."""
+    email = f"reg_schema_{uuid.uuid4().hex[:8]}@finsight.ai"
+    resp = client.post("/api/auth/register", json={
+        "name": "Schema User",
+        "email": email,
+        "password": "ValidSecure2026!",
+        "phone": "+14155552671"
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "access_token" in data and len(data["access_token"]) > 20
+    assert "token" in data and data["token"] == data["access_token"]
+    assert data.get("token_type") == "bearer"
+    assert data["user"]["email"] == email
+
+def test_authenticated_me_using_login_token(client, make_user):
+    """Subsequent requests using 'Authorization: Bearer <access_token>' to /api/auth/me succeed."""
+    user = make_user(password="ValidSecure2026!")
+    login_resp = client.post("/api/auth/login", json={
+        "email": user["email"],
+        "password": "ValidSecure2026!"
+    })
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+
+    me_resp = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me_resp.status_code == 200
+    me_data = me_resp.json()
+    assert me_data["email"] == user["email"]
+    assert me_data["id"] == user["id"]
+
+def test_demo_user_login_flow(client):
+    """Demo user demo@finsight.ai can log in or register and receive an access token."""
+    login_resp = client.post("/api/auth/login", json={
+        "email": "demo@finsight.ai",
+        "password": "password123"
+    })
+    if login_resp.status_code == 401:
+        reg_resp = client.post("/api/auth/register", json={
+            "name": "Alex Mercer",
+            "email": "demo@finsight.ai",
+            "password": "password123",
+            "phone": "+14155552671"
+        })
+        assert reg_resp.status_code == 200
+        token = reg_resp.json().get("access_token")
+    else:
+        assert login_resp.status_code == 200
+        token = login_resp.json().get("access_token")
+    assert token is not None and len(token) > 20
+

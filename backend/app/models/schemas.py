@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -22,8 +22,17 @@ class UserOut(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    token: Optional[str] = None
     token_type: str = "bearer"
     user: UserOut
+
+    @model_validator(mode="after")
+    def populate_token_alias(self):
+        if not self.token and self.access_token:
+            self.token = self.access_token
+        elif not self.access_token and self.token:
+            self.access_token = self.token
+        return self
 
 class TokenData(BaseModel):
     user_id: Optional[str] = None

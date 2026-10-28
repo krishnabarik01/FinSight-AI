@@ -83,8 +83,9 @@ export function App() {
   const handleExploreDemo = async () => {
     try {
       const res = await api.auth.login({ email: 'demo@finsight.ai', password: 'password123' });
-      if (res && res.access_token && res.user) {
-        setToken(res.access_token);
+      const token = res?.access_token || res?.token;
+      if (token && res?.user) {
+        setToken(token);
         setStoredUser(res.user);
         setUser(res.user);
         setCurrentTab('dashboard');
@@ -100,8 +101,9 @@ export function App() {
           password: 'password123',
           phone: '+1 (415) 555-2671',
         });
-        if (regRes && regRes.access_token && regRes.user) {
-          setToken(regRes.access_token);
+        const regToken = regRes?.access_token || regRes?.token;
+        if (regToken && regRes?.user) {
+          setToken(regToken);
           setStoredUser(regRes.user);
           setUser(regRes.user);
           setCurrentTab('dashboard');
