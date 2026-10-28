@@ -120,12 +120,12 @@ def test_get_me_without_token_returns_401(client):
 def test_cors_headers_for_render_origin(client):
     """Preflight and requests from Render deployment origins should receive valid CORS headers."""
     headers = {
-        "Origin": "https://finsight-ai-1-n7mt.onrender.com",
+        "Origin": "https://finsight-ai-bvm3.onrender.com",
         "Access-Control-Request-Method": "GET",
     }
     resp = client.options("/api/health", headers=headers)
     assert resp.status_code == 200
-    assert resp.headers.get("access-control-allow-origin") == "https://finsight-ai-1-n7mt.onrender.com"
+    assert resp.headers.get("access-control-allow-origin") == "https://finsight-ai-bvm3.onrender.com"
 
 def test_cors_headers_for_vercel_origin(client):
     """Preflight and requests from Vercel deployment origins should receive valid CORS headers."""

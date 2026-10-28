@@ -1,7 +1,9 @@
 // FinSight AI Frontend API Client
 
+const LIVE_RENDER_BACKEND = 'https://finsight-ai-bvm3.onrender.com';
+
 const getApiBase = (): string => {
-  const envUrl = (
+  let envUrl = (
     (typeof import.meta !== 'undefined' && import.meta.env && (
       import.meta.env.VITE_API_BASE_URL ||
       import.meta.env.VITE_API_URL ||
@@ -18,7 +20,25 @@ const getApiBase = (): string => {
     ''
   ).trim();
 
-  if (!envUrl) return '/api';
+  // Safeguard: automatically migrate away from decommissioned Render URL that returns 503
+  if (envUrl.includes('finsight-ai-1-n7mt.onrender.com')) {
+    envUrl = envUrl.replace('finsight-ai-1-n7mt.onrender.com', 'finsight-ai-bvm3.onrender.com');
+  }
+
+  // When deployed on static hosting without explicit env variable, target live Render backend
+  if (!envUrl) {
+    const isLocalhost =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' ||
+       window.location.hostname === '127.0.0.1' ||
+       window.location.hostname === '0.0.0.0');
+    if (!isLocalhost && typeof window !== 'undefined' && window.location.hostname) {
+      envUrl = LIVE_RENDER_BACKEND;
+    } else {
+      return '/api';
+    }
+  }
+
   const cleanUrl = envUrl.replace(/\/+$/, '');
   return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
 };
@@ -193,6 +213,11 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
       if (text && text.trim().length > 0 && text.length < 200) {
         errorDetail = text.trim();
       }
+    }
+    if (response.status === 503 && errorDetail === 'API request failed (503)') {
+      errorDetail = 'Backend service unavailable (503). The Render server may be starting up or temporarily offline.';
+    } else if (response.status === 502 && errorDetail === 'API request failed (502)') {
+      errorDetail = 'Bad Gateway (502). The backend server may be waking up.';
     }
     console.error(`[FinSight API Error] ${options.method || 'GET'} ${cleanEndpoint} (${response.status}):`, errorDetail);
     throw new Error(errorDetail);
