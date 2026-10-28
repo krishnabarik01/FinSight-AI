@@ -3,12 +3,14 @@
 const getApiBase = (): string => {
   const envUrl = (
     (typeof import.meta !== 'undefined' && import.meta.env && (
+      import.meta.env.VITE_API_BASE_URL ||
       import.meta.env.VITE_API_URL ||
       import.meta.env.VITE_BACKEND_URL ||
       import.meta.env.VITE_API_BASE
     )) ||
     (typeof window !== 'undefined' && (
       (window as any).__FINSIGHT_API_URL__ ||
+      (window as any).VITE_API_BASE_URL ||
       (window as any).VITE_API_URL ||
       (window as any).VITE_BACKEND_URL
     )) ||
@@ -197,6 +199,12 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
   }
 
   if (!text || text.trim() === '') {
+    if (options.method && options.method.toUpperCase() !== 'GET') {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      throw new Error(
+        `The backend server is not reachable at ${targetUrl}. When deployed on a static hosting service, ensure VITE_API_URL is configured in your deployment settings to point to your FastAPI backend Web Service.`
+      );
+    }
     return {} as T;
   }
 

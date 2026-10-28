@@ -127,6 +127,16 @@ def test_cors_headers_for_render_origin(client):
     assert resp.status_code == 200
     assert resp.headers.get("access-control-allow-origin") == "https://finsight-ai-1-n7mt.onrender.com"
 
+def test_cors_headers_for_vercel_origin(client):
+    """Preflight and requests from Vercel deployment origins should receive valid CORS headers."""
+    headers = {
+        "Origin": "https://finsight-ai.vercel.app",
+        "Access-Control-Request-Method": "GET",
+    }
+    resp = client.options("/api/health", headers=headers)
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == "https://finsight-ai.vercel.app"
+
 
 @pytest.mark.anyio
 async def test_password_hash_not_stored_in_plain_text(client, make_user):
